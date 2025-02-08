@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional
 from PIL import Image, ImageTk
+import numpy as np
 
 from image_processor import Kernel, ImageProcessor
 
@@ -218,6 +219,54 @@ class MainApplication(tk.Tk):
         except Exception as e:
             print(f"Error loading preview: {e}")
 
+    def _build_kernel_options(self) -> None:
+        """
+        Builds and updates the kernel options panel based on the selected kernel type.
+        """
+        # Clear previous options
+        for widget in self.kernel_options_content_frame.winfo_children():
+            widget.destroy()
+
+        # Left-side options panel
+        options_panel = tk.Frame(self.kernel_options_content_frame, bg="lightyellow")
+        options_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+
+        # Right-side kernel preview panel
+        self.kernel_preview_canvas = tk.Canvas(self.kernel_options_content_frame, width=100, height=100, bg="white")
+        self.kernel_preview_canvas.pack(side=tk.RIGHT, padx=10, pady=10)
+
+        # Add kernel size input (common for all kernels)
+        tk.Label(options_panel, text="Kernel Size N:").pack(pady=2)
+        self.kernel_size_var = tk.IntVar(value=3)
+        tk.Entry(options_panel, textvariable=self.kernel_size_var, width=5).pack(pady=2)
+
+        # Bind event to update kernel preview
+        self.kernel_size_var.trace_add("write", self._on_kernel_param_change)
+
+        # Additional options for specific kernels
+        if self.selected_kernel == "Gaussian":
+            tk.Label(options_panel, text="Sigma:").pack(pady=2)
+            self.sigma_var = tk.DoubleVar(value=1.0)
+            tk.Entry(options_panel, textvariable=self.sigma_var, width=5).pack(pady=2)
+            self.sigma_var.trace_add("write", self._on_kernel_param_change)
+
+        elif self.selected_kernel == "Sobel":
+            tk.Label(options_panel, text="Edge Direction:").pack(pady=2)
+            self.edge_dir_var = tk.StringVar(value="Horizontal")
+            ttk.Combobox(options_panel, textvariable=self.edge_dir_var, values=["Horizontal", "Vertical"]).pack(pady=2)
+            self.edge_dir_var.trace_add("write", self._on_kernel_param_change)
+
+        elif self.selected_kernel == "Laplacian":
+            tk.Label(options_panel, text="Scale Factor:").pack(pady=2)
+            self.scale_var = tk.DoubleVar(value=1.0)
+            tk.Entry(options_panel, textvariable=self.scale_var, width=5).pack(pady=2)
+            self.scale_var.trace_add("write", self._on_kernel_param_change)
+
+        # Refresh UI
+        self.kernel_options_content_frame.update_idletasks()
+        self._update_kernel_preview()
+
+
     # ---------------------------
     #       EVENT HANDLERS
     # ---------------------------
@@ -227,10 +276,64 @@ class MainApplication(tk.Tk):
         Called when the user selects a kernel from the dropdown.
         """
         selected_name = self.kernel_var.get()
-        for k in self.image_processor.available_kernels:
-            if k == selected_name:
-                self.selected_kernel = k
-                break
+        if selected_name in self.image_processor.available_kernels:
+            self.selected_kernel = selected_name
+            self._build_kernel_options()  # Refresh the UI with relevant fields
+
+    def _on_kernel_param_change(self, *args) -> None:
+        """
+        Called whenever a kernel-related input field is modified.
+        It updates the kernel and refreshes the preview.
+        """
+        # Gather current kernel settings
+        kernel_size = self.kernel_size_var.get()
+        params = {"size": kernel_size}
+
+        if self.selected_kernel == "Gaussian":
+            params["sigma"] = self.sigma_var.get()
+        elif self.selected_kernel == "Sobel":
+            params["direction"] = self.edge_dir_var.get()
+        elif self.selected_kernel == "Laplacian":
+            params["scale"] = self.scale_var.get()
+
+        # Update the kernel in the ImageProcessor
+        self.image_processor.update_kernel(self.selected_kernel, **params)
+
+        # Refresh the preview
+        self._update_kernel_preview()
+
+    def _update_kernel_preview(self) -> None:
+        """
+        Retrieves the kernel matrix from the ImageProcessor, converts it into an image,
+        and displays it in the kernel preview canvas.
+        """
+        if not self.selected_kernel:
+            return
+
+        # Get the kernel matrix (2D list) from the ImageProcessor
+        kernel_matrix = self.image_processor.get_kernel()
+
+        if not kernel_matrix:
+            return
+
+        kernel_array = np.array(kernel_matrix)
+
+        # Normalize values for better visualization
+        kernel_min, kernel_max = kernel_array.min(), kernel_array.max()
+        if kernel_max > kernel_min:  # Avoid division by zero
+            kernel_array = (kernel_array - kernel_min) / (kernel_max - kernel_min) * 255
+
+        
+        kernel_image = Image.fromarray(kernel_array.astype("uint8"))
+        kernel_image = kernel_image.resize((100, 100), Image.NEAREST)
+
+        # Convert to Tkinter-compatible image
+        self.kernel_preview_image = ImageTk.PhotoImage(kernel_image)
+
+        # Display in the canvas
+        self.kernel_preview_canvas.create_image(50, 50, image=self.kernel_preview_image)
+        self.kernel_preview_canvas.image = self.kernel_preview_image  # Prevent garbage collection
+
 
     def on_apply_kernel(self) -> None:
         """
