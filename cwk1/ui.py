@@ -9,7 +9,7 @@ from typing import Optional
 from PIL import Image, ImageTk
 import numpy as np
 
-from image_processor import Kernel, ImageProcessor
+from image_processor import ImageProcessor
 
 
 class MainApplication(tk.Tk):
@@ -28,23 +28,17 @@ class MainApplication(tk.Tk):
 
         self.selected_kernel = None
 
-        # Create a StringVar to store the input image path
         self.image_path_var = tk.StringVar(value="")
 
         # --- Initialize UI Elements ---
-        # 1) Top-level frames: we want top left for images, top right for options, bottom for save
         self._create_main_frames()
 
-        # 2) Top Frame: Display and lets user select image file path
         self._create_top_panel()
 
-        # 3) Inside left frame: kernel image display (top), thresholding image display (bottom)
         self._create_image_panes()
 
-        # 4) Inside right frame: kernel options (top), thresholding options (bottom)
         self._create_options_panes()
 
-        # 5) Bottom frame: path selection + "Save" button
         self._create_bottom_panel()
 
 
@@ -82,14 +76,12 @@ class MainApplication(tk.Tk):
          - Top: kernel result image
          - Bottom: threshold result image
         """
-        # split the image_frame vertically
         self.kernel_image_frame = tk.Frame(self.image_frame, bg="white", height=500)
         self.kernel_image_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.threshold_image_frame = tk.Frame(self.image_frame, bg="white", height=500)
         self.threshold_image_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        # Inside each frame, place a label or canvas to show the image
         self.kernel_image_label = tk.Label(self.kernel_image_frame, text="Kernel Image Preview")
         self.kernel_image_label.pack(pady=10)
 
@@ -206,8 +198,8 @@ class MainApplication(tk.Tk):
         :param file_path: Path to the image file.
         """
         try:
-            image = Image.open(file_path)  # Open image
-            image.thumbnail((50, 50))  # Resize while maintaining aspect ratio
+            image = Image.open(file_path)
+            image.thumbnail((50, 50)) 
 
             # Convert to Tkinter image format
             self.tk_image = ImageTk.PhotoImage(image)
@@ -223,19 +215,17 @@ class MainApplication(tk.Tk):
         """
         Builds and updates the kernel options panel based on the selected kernel type.
         """
-        # Clear previous options
         for widget in self.kernel_options_content_frame.winfo_children():
             widget.destroy()
 
-        # Left-side options panel
+        # Left-side panel
         options_panel = tk.Frame(self.kernel_options_content_frame, bg="lightyellow")
         options_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
 
-        # Right-side kernel preview panel
+        # Right-side panel
         self.kernel_preview_canvas = tk.Canvas(self.kernel_options_content_frame, width=100, height=100, bg="white")
         self.kernel_preview_canvas.pack(side=tk.RIGHT, padx=10, pady=10)
 
-        # Add kernel size input (common for all kernels)
         tk.Label(options_panel, text="Kernel Size N:").pack(pady=2)
         self.kernel_size_var = tk.IntVar(value=3)
         tk.Entry(options_panel, textvariable=self.kernel_size_var, width=5).pack(pady=2)
@@ -243,26 +233,12 @@ class MainApplication(tk.Tk):
         # Bind event to update kernel preview
         self.kernel_size_var.trace_add("write", self._on_kernel_param_change)
 
-        # Additional options for specific kernels
         if self.selected_kernel == "Gaussian":
             tk.Label(options_panel, text="Sigma:").pack(pady=2)
             self.sigma_var = tk.DoubleVar(value=1.0)
             tk.Entry(options_panel, textvariable=self.sigma_var, width=5).pack(pady=2)
             self.sigma_var.trace_add("write", self._on_kernel_param_change)
 
-        elif self.selected_kernel == "Sobel":
-            tk.Label(options_panel, text="Edge Direction:").pack(pady=2)
-            self.edge_dir_var = tk.StringVar(value="Horizontal")
-            ttk.Combobox(options_panel, textvariable=self.edge_dir_var, values=["Horizontal", "Vertical"]).pack(pady=2)
-            self.edge_dir_var.trace_add("write", self._on_kernel_param_change)
-
-        elif self.selected_kernel == "Laplacian":
-            tk.Label(options_panel, text="Scale Factor:").pack(pady=2)
-            self.scale_var = tk.DoubleVar(value=1.0)
-            tk.Entry(options_panel, textvariable=self.scale_var, width=5).pack(pady=2)
-            self.scale_var.trace_add("write", self._on_kernel_param_change)
-
-        # Refresh UI
         self.kernel_options_content_frame.update_idletasks()
         self._update_kernel_preview()
 
@@ -278,62 +254,62 @@ class MainApplication(tk.Tk):
         selected_name = self.kernel_var.get()
         if selected_name in self.image_processor.available_kernels:
             self.selected_kernel = selected_name
-            self._build_kernel_options()  # Refresh the UI with relevant fields
+            self._build_kernel_options() 
 
     def _on_kernel_param_change(self, *args) -> None:
         """
         Called whenever a kernel-related input field is modified.
         It updates the kernel and refreshes the preview.
         """
-        # Gather current kernel settings
+        
         kernel_size = self.kernel_size_var.get()
+        if not kernel_size:
+            kernel_size = 0
         params = {"size": kernel_size}
 
         if self.selected_kernel == "Gaussian":
             params["sigma"] = self.sigma_var.get()
-        elif self.selected_kernel == "Sobel":
-            params["direction"] = self.edge_dir_var.get()
-        elif self.selected_kernel == "Laplacian":
-            params["scale"] = self.scale_var.get()
 
-        # Update the kernel in the ImageProcessor
         self.image_processor.update_kernel(self.selected_kernel, **params)
 
-        # Refresh the preview
         self._update_kernel_preview()
 
     def _update_kernel_preview(self) -> None:
         """
         Retrieves the kernel matrix from the ImageProcessor, converts it into an image,
-        and displays it in the kernel preview canvas.
+        and displays it in the kernel preview canvas. Catches errors and displays them to the user.
         """
-        if not self.selected_kernel:
-            return
+        try:
+            if not self.selected_kernel:
+                return
 
-        # Get the kernel matrix (2D list) from the ImageProcessor
-        kernel_matrix = self.image_processor.get_kernel()
+            # Get the kernel matrix (2D list) from the ImageProcessor
+            kernel_matrix = self.image_processor.get_current_kernel()
 
-        if not kernel_matrix:
-            return
+            if kernel_matrix is None or len(kernel_matrix) == 0:
+                return
 
-        kernel_array = np.array(kernel_matrix)
+            kernel_array = np.array(kernel_matrix)
 
-        # Normalize values for better visualization
-        kernel_min, kernel_max = kernel_array.min(), kernel_array.max()
-        if kernel_max > kernel_min:  # Avoid division by zero
-            kernel_array = (kernel_array - kernel_min) / (kernel_max - kernel_min) * 255
+            # Normalize values for better visualization
+            kernel_min, kernel_max = kernel_array.min(), kernel_array.max()
+            if kernel_max > kernel_min:  # Avoid division by zero
+                kernel_array = (kernel_array - kernel_min) / (kernel_max - kernel_min) * 255
 
-        
-        kernel_image = Image.fromarray(kernel_array.astype("uint8"))
-        kernel_image = kernel_image.resize((100, 100), Image.NEAREST)
+            # Convert to PIL Image
+            kernel_image = Image.fromarray(kernel_array.astype("uint8"))
+            kernel_image = kernel_image.resize((100, 100), Image.NEAREST)
 
-        # Convert to Tkinter-compatible image
-        self.kernel_preview_image = ImageTk.PhotoImage(kernel_image)
+            # Convert to Tkinter-compatible image
+            self.kernel_preview_image = ImageTk.PhotoImage(kernel_image)
 
-        # Display in the canvas
-        self.kernel_preview_canvas.create_image(50, 50, image=self.kernel_preview_image)
-        self.kernel_preview_canvas.image = self.kernel_preview_image  # Prevent garbage collection
+            # Display in the canvas
+            self.kernel_preview_canvas.create_image(50, 50, image=self.kernel_preview_image)
+            self.kernel_preview_canvas.image = self.kernel_preview_image  # Prevent garbage collection
 
+        except Exception as e:
+            # Show error message popup
+            messagebox.showerror("Kernel Preview Error", f"An error occurred while updating the kernel preview:\n{e}")
 
     def on_apply_kernel(self) -> None:
         """

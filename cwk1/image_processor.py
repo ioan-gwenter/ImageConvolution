@@ -1,20 +1,10 @@
 import numpy as np
 from typing import List, Optional, Tuple
-from dataclasses import dataclass
 import cv2 
-
-@dataclass
-class Kernel:
-    """
-    Represents a convolution kernel.
-    """
-    name: str
-    matrix: np.ndarray
 
 class ImageProcessor:
     """
-    Class for performing image processing operations such as
-    kernel-based convolution and thresholding.
+    Class for kernel-based convolution and thresholding.
     """
 
     def __init__(self) -> None:
@@ -26,9 +16,89 @@ class ImageProcessor:
         self.input_image_data = None
 
         self.available_kernels = ["Gaussian", "Average", "Custom"]
+        self.current_kernel = None
+
+    # ---------------------------
+    #       KERNEL MANAGER
+    # ---------------------------
 
     def get_available_kernels(self) -> List:
         return self.available_kernels
+
+    def get_current_kernel(self) -> List:
+        return self.current_kernel
+    
+    def update_kernel(self, kernel_type: str, **params) -> None:
+        """
+        Updates the current kernel based on the selected type and parameters.
+        
+        :param kernel_type: The type of kernel .
+        :param params: Additional parameters required for the kernel.
+        """
+        if kernel_type == "Gaussian":
+            size = params.get("size")
+            sigma = params.get("sigma")
+            self.current_kernel = self._generate_gaussian_kernel(size, sigma)
+        elif kernel_type == "Average":
+            size = params.get("size")
+            self.current_kernel = self._generate_average_kernel(size)
+        else:
+            self.current_kernel = None
+            raise ValueError(f"Unsupported kernel type: {kernel_type}")
+
+    def _generate_gaussian_kernel(self, size: int, sigma: float) -> np.ndarray:
+        """
+        Generates a 2D Gaussian kernel.
+
+        :param size: The size of the kernel (size x size).
+        :param sigma: The standard deviation of the Gaussian distribution.
+        :return: A 2D NumPy array representing the Gaussian kernel.
+        """
+        if size % 2 == 0:
+            raise ValueError("Kernel size must be odd to ensure a center pixel.")
+
+        # Define the kernel grid (centered at 0)
+        k = size // 2
+        x, y = np.meshgrid(np.arange(-k, k + 1), np.arange(-k, k + 1))
+
+        # Compute the Gaussian function
+        gaussian_kernel = np.exp(-(x**2 + y**2) / (2 * sigma**2))
+        
+        # Normalize the kernel so that the sum equals 1
+        gaussian_kernel /= np.sum(gaussian_kernel)
+
+        return gaussian_kernel
+    
+    def _generate_average_kernel(self, size: int) -> np.ndarray:
+        """
+        Generates an averaging kernel of given size.
+
+        :param size: The size of the kernel (size x size).
+        :return: A 2D NumPy array representing the averaging kernel.
+        """
+        if size % 2 == 0:
+            raise ValueError("Kernel size must be an odd integer to ensure a center pixel.")
+
+        # Create an NxN matrix filled with 1s
+        kernel = np.ones((size, size), dtype=np.float32)
+
+        # Normalize by dividing each element by the total number of elements
+        kernel /= (size * size)
+
+        return kernel
+        
+
+    def apply_kernel(self) -> np.ndarray:
+        """
+        Applies a convolutional kernel to the image.
+        :param kernel: Kernel object containing name and matrix.
+        :return: Processed 2D NumPy array.
+        """
+        return False
+
+    # ---------------------------
+    #       IMAGE MANAGER
+    # ---------------------------
 
     def set_target_image(self, file_path: str) -> bool:
         """
@@ -71,30 +141,5 @@ class ImageProcessor:
         if image is None:
             raise ValueError(f"Failed to load image: {file_path}")
         return image
-
-    def apply_kernel(self, kernel: Kernel) -> np.ndarray:
-        """
-        Applies a convolutional kernel to the image.
-        :param kernel: Kernel object containing name and matrix.
-        :return: Processed 2D NumPy array.
-        """
-        kernel_size = kernel.matrix.shape[0]
-        pad_size = kernel_size // 2  # Padding size
-
-        # Pad image with zeros to maintain dimensions after convolution
-        padded_image = np.pad(self.image_data, pad_size, mode='constant', constant_values=0)
-
-        # Prepare an empty output image
-        output = np.zeros_like(self.image_data, dtype=np.float32)
-
-        # Convolution operation
-        for i in range(self.image_data.shape[0]):  # Loop over height
-            for j in range(self.image_data.shape[1]):  # Loop over width
-                region = padded_image[i:i + kernel_size, j:j + kernel_size]
-                output[i, j] = np.sum(region * kernel.matrix)
-
-        # Normalize and convert back to 8-bit
-        output = np.clip(output, 0, 255)
-        return output.astype(np.uint8)
 
     
