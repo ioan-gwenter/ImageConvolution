@@ -105,7 +105,7 @@ class MainApplication(tk.Tk):
         kernel_label.pack(pady=5)
 
         self.kernel_var = tk.StringVar()
-        self.kernel_dropdown = ttk.Combobox(self.kernel_options_frame, textvariable=self.kernel_var, values=self.image_processor.available_kernels)
+        self.kernel_dropdown = ttk.Combobox(self.kernel_options_frame, textvariable=self.kernel_var, values=self.image_processor.available_smoothing_kernels)
         self.kernel_dropdown.set("Select kernel")
         self.kernel_dropdown.pack(side=tk.TOP, pady=5)
         self.kernel_dropdown.bind("<<ComboboxSelected>>", self.on_kernel_selected)
@@ -252,7 +252,7 @@ class MainApplication(tk.Tk):
         Called when the user selects a kernel from the dropdown.
         """
         selected_name = self.kernel_var.get()
-        if selected_name in self.image_processor.available_kernels:
+        if selected_name in self.image_processor.available_smoothing_kernels:
             self.selected_kernel = selected_name
             self._build_kernel_options() 
 
@@ -360,6 +360,7 @@ class MainApplication(tk.Tk):
         )
         if filename:
             self.image_path_var.set(filename)  # Update entry field
+            self.image_processor.set_target_image(file_path=filename)
             self._update_image_preview(filename)  # Load preview
                 
 
